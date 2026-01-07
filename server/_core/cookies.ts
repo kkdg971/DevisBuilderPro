@@ -24,25 +24,25 @@ function isSecureRequest(req: Request) {
 export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
+  const hostname = req.hostname;
+  let domain: string | undefined;
 
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
+  if (process.env.NODE_ENV === "production" && hostname.includes(".onrender.com")) {
+    // For Render, set domain to .onrender.com to allow subdomains to share cookies
+    domain = ".onrender.com";
+  } else if (hostname && !LOCAL_HOSTS.has(hostname) && !isIpAddress(hostname)) {
+    // For other production environments or custom domains
+    domain = hostname.startsWith(".") ? hostname : `.${hostname}`;
+  } else {
+    // For local development or IP addresses, no domain is set
+    domain = undefined;
+  }
 
   return {
     httpOnly: true,
     path: "/",
     sameSite: "none",
     secure: isSecureRequest(req),
+    domain: domain,
   };
 }
