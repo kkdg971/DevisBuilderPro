@@ -43,6 +43,7 @@ export function registerOAuthRoutes(app: Express) {
       };
 
       console.log("[Auth Debug] User session created:", (req.session as any).user);
+      console.log("[Auth Debug] Session ID before save:", req.sessionID);
 
       req.session.save((err) => {
         if (err) {
