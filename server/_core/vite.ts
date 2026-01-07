@@ -25,21 +25,16 @@ export async function setupVite(app: Express, server: Server) {
     const url = req.originalUrl;
 
     try {
-      // En développement, cherche client/index.html
-      // En production, ce chemin n'existe pas et setupVite échoue
       const clientTemplate = path.resolve(
         import.meta.dirname,
         "../../client",
         "index.html"
       );
 
-      // Check if file exists before trying to read it
       if (!fs.existsSync(clientTemplate)) {
-        console.warn(`Client template not found at ${clientTemplate}`);
         throw new Error(`Client template not found at ${clientTemplate}`);
       }
 
-      // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
@@ -55,29 +50,39 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  // Always use dist/public for static files
-  const distPath = path.resolve(import.meta.dirname, "../../dist/public");
-  
-  console.log(`[DEBUG] Serving static files from: ${distPath}`);
-  
-  if (!fs.existsSync(distPath)) {
-    console.error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`
-    );
+  // Chemins possibles pour dist/public sur Render
+  const possiblePaths = [
+    path.resolve(import.meta.dirname, "../../dist/public"),
+    path.resolve(process.cwd(), "dist/public"),
+    path.resolve(process.cwd(), "src/dist/public"),
+    "/opt/render/project/src/dist/public",
+    "/opt/render/project/dist/public"
+  ];
+
+  let distPath = "";
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p) && fs.existsSync(path.resolve(p, "index.html"))) {
+      distPath = p;
+      break;
+    }
   }
 
+  if (!distPath) {
+    console.error("Could not find dist/public directory in any of the expected locations:");
+    possiblePaths.forEach(p => console.error(` - ${p}`));
+    // Fallback to the first one anyway
+    distPath = possiblePaths[0];
+  }
+
+  console.log(`[DEBUG] Serving static files from: ${distPath}`);
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
-    console.log(`[DEBUG] Serving index.html from: ${indexPath}`);
-    
     if (!fs.existsSync(indexPath)) {
       console.error(`index.html not found at ${indexPath}`);
-      return res.status(500).send("index.html not found");
+      return res.status(500).send(`index.html not found at ${indexPath}`);
     }
-    
     res.sendFile(indexPath);
   });
 }
