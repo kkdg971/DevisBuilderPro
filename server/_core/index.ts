@@ -16,7 +16,7 @@ async function startServer() {
   const server = createServer(app);
 
   // Trust proxy for Render deployment
-  app.set('trust proxy', 1);
+  app.set("trust proxy", 1);
 
   // Configure express-session
   app.use(
@@ -25,14 +25,22 @@ async function startServer() {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        secure: true, // Always use secure cookies as Render forces HTTPS
         httpOnly: true,
-        sameSite: 'lax', // Adjust as needed, 'none' for cross-site, 'lax' for same-site
+        sameSite: "none", // Required for cross-site cookies with secure: true
         maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Set domain for Render
+        domain: ".onrender.com", // Explicitly set domain for Render
       },
     } )
   );
+
+  console.log("[DEBUG] Express-session cookie config:", {
+    secure: true,
+    httpOnly: true,
+    sameSite: "none",
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    domain: ".onrender.com",
+  } );
 
   // Register OAuth routes
   registerOAuthRoutes(app);
