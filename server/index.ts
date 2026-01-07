@@ -1,129 +1,76 @@
-import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
-import net from "net";
+import path from "path";
+import { fileURLToPath } from "url";
 import session from "express-session";
-import FileStoreFactory from "session-file-store";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { registerOAuthRoutes } from "./_core/oauth";
+import { createContext } from "./_core/trpc";
+import { appRouter } from "./routers";
+import * as trpcExpress from "@trpc/server/adapters/express";
 
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { registerOAuthRoutes } from "./oauth";
-import { serveStatic, setupVite } from "./vite";
+const __filename = fileURLToPath(import.meta.url );
+const __dirname = path.dirname(__filename);
 
-// ─────────────────────────────────────────────
-// Security check
-// ─────────────────────────────────────────────
-if (!process.env.SESSION_SECRET) {
-  throw new Error("❌ SESSION_SECRET is missing in environment variables");
-}
-
-// ─────────────────────────────────────────────
-// Utils
-// ─────────────────────────────────────────────
-function isPortAvailable(port: number): Promise<boolean> {
-  return new Promise(resolve => {
-    const server = net.createServer();
-    server.listen(port, () => {
-      server.close(() => resolve(true));
-    });
-    server.on("error", () => resolve(false));
-  });
-}
-
-async function findAvailablePort(startPort = 3000): Promise<number> {
-  for (let port = startPort; port < startPort + 20; port++) {
-    if (await isPortAvailable(port)) {
-      return port;
-    }
-  }
-  throw new Error(`No available port found starting from ${startPort}`);
-}
-
-// ─────────────────────────────────────────────
-// Server
-// ─────────────────────────────────────────────
 async function startServer() {
   const app = express();
-  app.set("trust proxy", 1);
-
   const server = createServer(app);
 
-  // Body parsers
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+  // Trust proxy for Render deployment
+  app.set("trust proxy", 1);
 
-  // ─────────────────────────────────────────────
-  // Session store (NO MemoryStore in prod)
-  // ─────────────────────────────────────────────
-  const FileStore = FileStoreFactory(session);
-
+  // Configure express-session
   app.use(
     session({
-      name: "devisia.sid",
-      store: new FileStore({
-        path: "./sessions",
-        retries: 1,
-      }),
-      secret: process.env.SESSION_SECRET,
+      secret: process.env.SESSION_SECRET || "supersecret", // Use a strong secret from environment variables
       resave: false,
       saveUninitialized: false,
       cookie: {
+        secure: true, // Always use secure cookies as Render forces HTTPS
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 24 * 60 * 60 * 1000, // 24h
+        sameSite: "none", // Required for cross-site cookies with secure: true
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+        domain: ".onrender.com", // Explicitly set domain for Render
       },
-    })
+    } )
   );
 
-  // ─────────────────────────────────────────────
-  // OAuth routes
-  // ─────────────────────────────────────────────
+  console.log("[DEBUG] Express-session cookie config:", {
+    secure: true,
+    httpOnly: true,
+    sameSite: "none",
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    domain: ".onrender.com",
+  } );
+
+  // Register OAuth routes
   registerOAuthRoutes(app);
 
-  // ─────────────────────────────────────────────
-  // tRPC
-  // ─────────────────────────────────────────────
+  // tRPC middleware
   app.use(
     "/api/trpc",
-    createExpressMiddleware({
+    trpcExpress.createExpressMiddleware({
       router: appRouter,
       createContext,
     })
   );
 
-  // ─────────────────────────────────────────────
-  // Frontend (Vite / static)
-  // ─────────────────────────────────────────────
-  if (process.env.NODE_ENV === "production") {
-    console.log("🚀 Production mode — serving static files");
-    serveStatic(app);
-  } else {
-    try {
-      console.log("🧪 Dev mode — starting Vite");
-      await setupVite(app, server);
-    } catch (err) {
-      console.warn("⚠️ Vite failed — fallback to static");
-      serveStatic(app);
-    }
-  }
+  // Serve static files from dist/public
+  const staticPath = path.resolve(__dirname, "..", "dist", "public");
+  console.log(`[DEBUG] __dirname: ${__dirname}`);
+  console.log(`[DEBUG] staticPath: ${staticPath}`);
 
-  // ─────────────────────────────────────────────
-  // Start server
-  // ─────────────────────────────────────────────
-  const preferredPort = Number(process.env.PORT) || 3000;
-  const port = await findAvailablePort(preferredPort);
+  app.use(express.static(staticPath));
 
-  if (port !== preferredPort) {
-    console.log(`⚠️ Port ${preferredPort} busy → using ${port}`);
-  }
+  // Handle client-side routing - serve index.html for all routes
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(staticPath, "index.html"));
+  });
+
+  const port = process.env.PORT || 3000;
 
   server.listen(port, () => {
-    console.log(`✅ Server running on http://localhost:${port}`);
+    console.log(`Server running on http://localhost:${port}/` );
   });
 }
 
-startServer().catch(err => {
-  console.error("❌ Server failed to start:", err);
-});
+startServer().catch(console.error);
