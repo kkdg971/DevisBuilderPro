@@ -9,7 +9,7 @@ function isIpAddress(host: string) {
 }
 
 function isSecureRequest(req: Request) {
-  if (req.protocol === "https") return true;
+  if (req.protocol === "https" ) return true;
 
   const forwardedProto = req.headers["x-forwarded-proto"];
   if (!forwardedProto) return false;
@@ -18,7 +18,7 @@ function isSecureRequest(req: Request) {
     ? forwardedProto
     : forwardedProto.split(",");
 
-  return protoList.some(proto => proto.trim().toLowerCase() === "https");
+  return protoList.some(proto => proto.trim().toLowerCase() === "https" );
 }
 
 export function getSessionCookieOptions(
@@ -27,7 +27,7 @@ export function getSessionCookieOptions(
   const hostname = req.hostname;
   let domain: string | undefined;
 
-  if (process.env.NODE_ENV === "production" && hostname.includes(".onrender.com")) {
+  if (process.env.NODE_ENV === "production" && hostname.includes(".onrender.com" )) {
     // For Render, set domain to .onrender.com to allow subdomains to share cookies
     domain = ".onrender.com";
   } else if (hostname && !LOCAL_HOSTS.has(hostname) && !isIpAddress(hostname)) {
@@ -38,11 +38,14 @@ export function getSessionCookieOptions(
     domain = undefined;
   }
 
+  // Force secure: true in production on Render, as Render handles HTTPS termination
+  const secure = process.env.NODE_ENV === "production" && hostname.includes(".onrender.com") ? true : isSecureRequest(req);
+
   return {
     httpOnly: true,
     path: "/",
     sameSite: "none",
-    secure: isSecureRequest(req),
+    secure: secure,
     domain: domain,
   };
 }
