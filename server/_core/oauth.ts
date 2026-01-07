@@ -36,15 +36,13 @@ export function registerOAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
       });
 
-      const sessionToken = await sdk.createSessionToken(userInfo.openId, {
+      // Store user info in the session
+      (req.session as any).user = {
+        openId: userInfo.openId,
         name: userInfo.name || "",
-        expiresInMs: ONE_YEAR_MS,
-      });
+      };
 
-      const cookieOptions = getSessionCookieOptions(req);
-      console.log("[Auth Debug] Cookie options:", cookieOptions);
-      console.log("[Auth Debug] Setting session token:", sessionToken);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      console.log("[Auth Debug] User session created:", (req.session as any).user);
 
       res.redirect(302, "/");
     } catch (error) {

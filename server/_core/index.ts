@@ -1,87 +1,64 @@
-import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
-import net from "net";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
+import path from "path";
+import { fileURLToPath } from "url";
 import session from "express-session";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { registerOAuthRoutes } from "./_core/oauth";
+import { createContext } from "./_core/trpc";
+import { appRouter } from "./routers";
+import * as trpcExpress from "@trpc/server/adapters/express";
 
-function isPortAvailable(port: number ): Promise<boolean> {
-  return new Promise(resolve => {
-    const server = net.createServer();
-    server.listen(port, () => {
-      server.close(() => resolve(true));
-    });
-    server.on("error", () => resolve(false));
-  });
-}
-
-async function findAvailablePort(startPort: number = 3000): Promise<number> {
-  for (let port = startPort; port < startPort + 20; port++) {
-    if (await isPortAvailable(port)) {
-      return port;
-    }
-  }
-  throw new Error(`No available port found starting from ${startPort}`);
-}
+const __filename = fileURLToPath(import.meta.url );
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  app.set("trust proxy", 1); // Enable trust proxy for Render deployment environments like Render
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  // Session middleware
+  // Trust proxy for Render deployment
+  app.set('trust proxy', 1);
+
+  // Configure express-session
   app.use(
     session({
       secret: process.env.SESSION_SECRET || "supersecret", // Use a strong secret from environment variables
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === "production", // Ensure secure cookies in production
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
         httpOnly: true,
-        sameSite: "lax", // Adjust as needed, "lax" is a good default
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'lax', // Adjust as needed, 'none' for cross-site, 'lax' for same-site
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Set domain for Render
       },
     } )
   );
 
-  // OAuth callback under /api/oauth/callback
+  // Register OAuth routes
   registerOAuthRoutes(app);
-  // tRPC API
+
+  // tRPC middleware
   app.use(
     "/api/trpc",
-    createExpressMiddleware({
+    trpcExpress.createExpressMiddleware({
       router: appRouter,
       createContext,
     })
   );
-  // Use Vite in development, static files in production
-  if (process.env.NODE_ENV === "production") {
-    console.log("Production mode: using static files");
-    serveStatic(app);
-  } else {
-    // Development mode: try to use Vite
-    try {
-      console.log("Development mode: setting up Vite");
-      await setupVite(app, server);
-    } catch (e) {
-      console.log("Vite setup failed, falling back to static files");
-      serveStatic(app);
-    }
-  }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  // Serve static files from dist/public
+  const staticPath = path.resolve(__dirname, "..", "dist", "public");
+  console.log(`[DEBUG] __dirname: ${__dirname}`);
+  console.log(`[DEBUG] staticPath: ${staticPath}`);
 
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
-  }
+  app.use(express.static(staticPath));
+
+  // Handle client-side routing - serve index.html for all routes
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(staticPath, "index.html"));
+  });
+
+  const port = process.env.PORT || 3000;
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/` );
