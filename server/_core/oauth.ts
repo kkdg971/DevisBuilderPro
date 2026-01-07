@@ -42,6 +42,8 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       const cookieOptions = getSessionCookieOptions(req);
+      console.log("[Auth Debug] Cookie options:", cookieOptions);
+      console.log("[Auth Debug] Setting session token:", sessionToken);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       res.redirect(302, "/");
