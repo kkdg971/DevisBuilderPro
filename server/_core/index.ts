@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import session from "express-session";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -34,6 +35,22 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // Session middleware
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "supersecret", // Use a strong secret from environment variables
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === "production", // Ensure secure cookies in production
+        httpOnly: true,
+        sameSite: "lax", // Adjust as needed, "lax" is a good default
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      },
+    } )
+  );
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // tRPC API
