@@ -44,7 +44,15 @@ export function registerOAuthRoutes(app: Express) {
 
       console.log("[Auth Debug] User session created:", (req.session as any).user);
 
-      res.redirect(302, "/");
+      req.session.save((err) => {
+        if (err) {
+          console.error("[Auth Debug] Error saving session:", err);
+          res.status(500).json({ error: "Failed to save session" });
+        } else {
+          console.log("[Auth Debug] Session saved successfully.");
+          res.redirect(302, "/");
+        }
+      });
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

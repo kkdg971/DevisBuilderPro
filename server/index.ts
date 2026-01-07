@@ -27,9 +27,9 @@ async function startServer() {
       cookie: {
         secure: true, // Always use secure cookies as Render forces HTTPS
         httpOnly: true,
-        sameSite: "none", // Required for cross-site cookies with secure: true
+        sameSite: "lax", // Changed to lax
         maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-        domain: ".onrender.com", // Explicitly set domain for Render
+        // domain: ".onrender.com", // Removed explicit domain
       },
     } )
   );
@@ -37,10 +37,10 @@ async function startServer() {
   console.log("[DEBUG] Express-session cookie config:", {
     secure: true,
     httpOnly: true,
-    sameSite: "none",
+    sameSite: "lax",
     maxAge: 1000 * 60 * 60 * 24 * 7,
-    domain: ".onrender.com",
-  } );
+    domain: "(auto-determined )", // Indication for log
+  });
 
   // Register OAuth routes
   registerOAuthRoutes(app);
