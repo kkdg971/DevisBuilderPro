@@ -27,7 +27,7 @@ async function startServer() {
       cookie: {
         secure: true, // Always use secure cookies as Render forces HTTPS
         httpOnly: true,
-        sameSite: "lax", // Changed to lax
+        sameSite: "none", // Changed back to none
         maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
         // domain: ".onrender.com", // Removed explicit domain
       },
@@ -37,7 +37,7 @@ async function startServer() {
   console.log("[DEBUG] Express-session cookie config:", {
     secure: true,
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "none",
     maxAge: 1000 * 60 * 60 * 24 * 7,
     domain: "(auto-determined )", // Indication for log
   });
